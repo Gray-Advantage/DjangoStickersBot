@@ -1,7 +1,4 @@
-from django.contrib.postgres.search import (
-    SearchQuery,
-    SearchRank,
-)
+from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.db import models
 
 
@@ -13,7 +10,10 @@ class StickerManager(models.Manager):
                 rank=SearchRank(
                     "text_search_vector",
                     SearchQuery(query, config="russian"),
-                )
+                ),
             )
-            .order_by('-rank')[:5]
+            .order_by("-rank")[:5]
         )
+
+
+__all__ = ["StickerManager"]

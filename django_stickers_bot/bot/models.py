@@ -1,8 +1,8 @@
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector, SearchVectorField
+from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.db import models
-from django.contrib.postgres.search import SearchVectorField, SearchVector
-from django.contrib.postgres.indexes import GinIndex
 
 from bot.managers import StickerManager
 
@@ -62,9 +62,7 @@ class Sticker(models.Model):
     text_search_vector = SearchVectorField(null=True)
 
     class Meta:
-        indexes = (
-            GinIndex(fields=["text_search_vector"]),
-        )
+        indexes = (GinIndex(fields=["text_search_vector"]),)
 
     def __str__(self):
         return self.text
@@ -76,7 +74,7 @@ class Sticker(models.Model):
 @receiver(post_save, sender=Sticker)
 def update_search_vector(sender, instance, **kwargs):
     sender.objects.filter(pk=instance.pk).update(
-        text_search_vector=SearchVector("text", config="russian")
+        text_search_vector=SearchVector("text", config="russian"),
     )
 
 

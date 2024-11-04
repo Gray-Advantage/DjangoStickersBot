@@ -1,0 +1,9 @@
+[tool.flake8]
+max-line-length = 79
+inline-quotes="double"
+import-order-style="google"
+per-file-ignores = ["*/migrations/*:E501", "LN001", "C812", "DALL000"]
+application-import-names = ["bot", "django_sticker_bot"]
+
+[tool.black]
+line-length = 79

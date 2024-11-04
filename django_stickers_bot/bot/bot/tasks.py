@@ -2,9 +2,9 @@ from django.conf import settings
 from easyocr import Reader
 from telebot import TeleBot, types
 
-from bot.models import Sticker, StickerSet
-from bot.bot.utils import connect_user, preprocess_text
 from bot.bot import keyboards
+from bot.bot.utils import connect_user, preprocess_text
+from bot.models import Sticker, StickerSet
 
 
 reader = Reader(["ru", "en"], model_storage_directory=settings.OCR_MODELS)
@@ -58,9 +58,12 @@ def including_sticker_set(
     if flag_warm_about_video:
         bot.send_message(
             call.message.chat.id,
-            f"Некоторые стикеры не обработаны, так как это видео или анимация",
+            "Некоторые стикеры не обработаны, так как это видео или анимация",
         )
     bot.send_message(
         call.message.chat.id,
         "Стикер пак весь добавлен!",
     )
+
+
+__all__ = ["including_sticker_set"]

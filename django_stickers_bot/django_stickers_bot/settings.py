@@ -21,15 +21,6 @@ INSTALLED_APPS = [
 ROOT_URLCONF = "django_stickers_bot.urls"
 WSGI_APPLICATION = "django_stickers_bot.wsgi.application"
 
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": (
-#             BASE_DIR
-#             / f"{config('DATANAR_DATABASE_NAME', default='db')}.sqlite3"
-#         ),
-#     },
-# }
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",

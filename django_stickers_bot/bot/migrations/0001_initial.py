@@ -27,7 +27,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "telegram_id",
-                    models.PositiveBigIntegerField(verbose_name="ИД в телеграмме"),
+                    models.PositiveBigIntegerField(
+                        verbose_name="ИД в телеграмме"
+                    ),
                 ),
                 (
                     "is_admin",
@@ -67,7 +69,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "name",
-                    models.CharField(max_length=1024, verbose_name="Имя стикер пака"),
+                    models.CharField(
+                        max_length=1024, verbose_name="Имя стикер пака"
+                    ),
                 ),
                 (
                     "user",
@@ -108,10 +112,17 @@ class Migration(migrations.Migration):
                         verbose_name="ИД стикера для редактирования",
                     ),
                 ),
-                ("text", models.TextField(verbose_name="Текстовое содержимое стикера")),
+                (
+                    "text",
+                    models.TextField(
+                        verbose_name="Текстовое содержимое стикера"
+                    ),
+                ),
                 (
                     "text_search_vector",
-                    django.contrib.postgres.search.SearchVectorField(null=True),
+                    django.contrib.postgres.search.SearchVectorField(
+                        null=True
+                    ),
                 ),
                 (
                     "sticker_set",

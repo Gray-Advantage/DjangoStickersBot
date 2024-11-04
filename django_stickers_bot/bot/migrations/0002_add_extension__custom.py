@@ -1,8 +1,6 @@
+from django.contrib.postgres.operations import BtreeGinExtension
 from django.db import migrations
-from django.contrib.postgres.operations import (
-    BtreeGinExtension,
-    TrigramExtension,
-)
+
 
 class Migration(migrations.Migration):
     dependencies = [
@@ -11,5 +9,4 @@ class Migration(migrations.Migration):
 
     operations = [
         BtreeGinExtension(),
-        TrigramExtension(),
     ]

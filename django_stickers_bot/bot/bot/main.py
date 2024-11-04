@@ -1,12 +1,12 @@
 from sys import argv
 from threading import Thread
 
-import telebot.types
 from django.conf import settings
 from telebot import TeleBot
+import telebot.types
 
+from bot.bot import keyboards, tasks, utils
 from bot.models import Sticker, StickerSet, TelegramUser
-from bot.bot import tasks, keyboards, utils
 
 bot = TeleBot(settings.BOT_TOKEN)
 
@@ -21,7 +21,7 @@ def start(message: telebot.types.Message):
             "\n\nА ещё ты админ! Можешь мне прислать доп. стикеры и я буду "
             "искать ещё и среди них при следующих запросах пользователей"
         )
-    
+
     bot.send_message(
         message.chat.id,
         "Привет, я бот, который поможет найти тебе тот самый стикер с "
@@ -45,20 +45,18 @@ def start(message: telebot.types.Message):
 def router(message: telebot.types.Message):
     if message.content_type not in ["text", "sticker"]:
         bot.delete_message(message.chat.id, message.message_id)
-        return
+        return None
 
     user = utils.connect_user(message)
 
     if message.content_type == "text":
         if user.state == user.UserStates.IDLE:
             return search(message)
-        elif user.state == user.UserStates.EDIT_STICKER_TEXT:
-            return edit_sticker_text(message, user)
-    elif message.content_type == "sticker":
-        if user.is_admin:
-            return process_sticker(message, user)
-        else:
-            bot.delete_message(message.chat.id, message.message_id)
+        return edit_sticker_text(message, user)
+
+    if user.is_admin:
+        return process_sticker(message, user)
+    return bot.delete_message(message.chat.id, message.message_id)
 
 
 def search(message: telebot.types.Message):
@@ -182,7 +180,7 @@ def callback_inline(call: telebot.types.CallbackQuery):
     elif call.data.startswith("see_sticker"):
         bot.answer_callback_query(call.id)
         sticker = Sticker.objects.get(
-            file_unique_id=call.data.split(":", 1)[1]
+            file_unique_id=call.data.split(":", 1)[1],
         )
         bot.send_sticker(call.message.chat.id, sticker.file_id)
         bot.send_message(
@@ -192,13 +190,14 @@ def callback_inline(call: telebot.types.CallbackQuery):
             reply_markup=keyboards.edit_sticker_text(sticker.file_unique_id),
         )
 
+
 def start_polling():
     while True:
         try:
             bot.polling()
-        except Exception as e:
-            print(f"Ошибка в работе polling: {e}")
+        except Exception:
             continue
+
 
 if "runserver" in argv:
     if not settings.BOT_USE_WEBHOOK:
@@ -207,3 +206,6 @@ if "runserver" in argv:
         thread.start()
     else:
         bot.set_webhook(f"https://{settings.BOT_WEBHOOK_URL}/bot/")
+
+
+__all__ = []
