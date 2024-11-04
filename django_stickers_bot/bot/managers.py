@@ -12,7 +12,8 @@ class StickerManager(models.Manager):
                     SearchQuery(query, config="russian"),
                 ),
             )
-            .order_by("-rank")[:5]
+            .filter(rank__gte=0.01)
+            .order_by("-rank")[:3]
         )
 
 

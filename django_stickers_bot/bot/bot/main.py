@@ -60,21 +60,18 @@ def router(message: telebot.types.Message):
 
 
 def search(message: telebot.types.Message):
-    bot.send_message(message.chat.id, "Тут происходит поиск...")
+    bot.send_message(message.chat.id, "Происходит поиск...")
 
     result = Sticker.objects.search(message.text)
 
     if len(result) == 0:
-        bot.send_message(
-            message.chat.id,
-            "К сожалению, ничего не найдено",
-        )
+        bot.send_message(message.chat.id, "К сожалению, ничего не найдено")
         return
 
     for sticker in result:
-        bot.send_message(
+        bot.send_sticker(
             message.chat.id,
-            f"{sticker.text}\n\n{sticker.rank}",
+            sticker.file_id,
         )
 
 
@@ -104,17 +101,13 @@ def process_sticker(message: telebot.types.Message, user: TelegramUser):
     tg_sticker_set = bot.get_sticker_set(sticker.set_name)
 
     if StickerSet.objects.filter(name=tg_sticker_set.name).exists():
-        keyboard = None
-        if user.is_admin:
-            keyboard = keyboards.see_sticker_set(
-                tg_sticker_set.name,
-                sticker.file_unique_id,
-            )
-
         bot.reply_to(
             message,
             "Этот стикер пак у меня уже есть",
-            reply_markup=keyboard,
+            reply_markup=keyboards.see_sticker_set(
+                tg_sticker_set.name,
+                sticker.file_unique_id,
+            ),
         )
     else:
         bot.reply_to(
@@ -126,30 +119,31 @@ def process_sticker(message: telebot.types.Message, user: TelegramUser):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: telebot.types.CallbackQuery):
+    bot.answer_callback_query(call.id)
+
     if call.data.startswith("add_sticker_set"):
-        bot.answer_callback_query(call.id)
         bot.edit_message_reply_markup(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             reply_markup=None,
         )
-        task = Thread(
+        Thread(
             target=tasks.including_sticker_set,
             args=(bot, call, bot.get_sticker_set(call.data.split(":", 1)[1])),
-        )
-        task.start()
+        ).start()
+
     elif call.data.startswith("edit_sticker_text"):
-        bot.answer_callback_query(call.id)
         user = utils.connect_user(call)
         user.state = user.UserStates.EDIT_STICKER_TEXT
         user.context_data = call.data.split(":", 1)[1]
         user.save()
+
         bot.reply_to(
             call.message,
             "Ожидаю новый текст для этого стикера",
         )
+
     elif call.data.startswith("see_sticker_set"):
-        bot.answer_callback_query(call.id)
         stickers = Sticker.objects.filter(
             sticker_set__name=call.data.split(":", 1)[1],
         )
@@ -169,16 +163,8 @@ def callback_inline(call: telebot.types.CallbackQuery):
                 ),
                 parse_mode="Markdown",
             )
-    elif call.data.startswith("delete_sticker_set"):
-        bot.answer_callback_query(call.id)
-        StickerSet.objects.filter(name=call.data.split(":", 1)[1]).delete()
-        bot.edit_message_text(
-            "Стикер пак удалён",
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-        )
+
     elif call.data.startswith("see_sticker"):
-        bot.answer_callback_query(call.id)
         sticker = Sticker.objects.get(
             file_unique_id=call.data.split(":", 1)[1],
         )
@@ -188,6 +174,14 @@ def callback_inline(call: telebot.types.CallbackQuery):
             f"```\n{sticker.text}\n```",
             parse_mode="Markdown",
             reply_markup=keyboards.edit_sticker_text(sticker.file_unique_id),
+        )
+
+    elif call.data.startswith("delete_sticker_set"):
+        StickerSet.objects.filter(name=call.data.split(":", 1)[1]).delete()
+        bot.edit_message_text(
+            "Стикер пак удалён",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
         )
 
 
@@ -208,4 +202,4 @@ if "runserver" in argv:
         bot.set_webhook(f"https://{settings.BOT_WEBHOOK_URL}/bot/")
 
 
-__all__ = []
+__all__ = ["bot"]

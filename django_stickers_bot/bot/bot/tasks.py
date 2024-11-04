@@ -20,7 +20,7 @@ def including_sticker_set(
         user=connect_user(call),
     )
 
-    flag_warm_about_video = False
+    flag_warn_about_video = False
     for num, sticker in enumerate(tg_sticker_set.stickers, 1):
         bot.edit_message_text(
             f"Обработка: {num}/{len(tg_sticker_set.stickers)}",
@@ -29,7 +29,7 @@ def including_sticker_set(
         )
 
         if sticker.is_video or sticker.is_animated:
-            flag_warm_about_video = True
+            flag_warn_about_video = True
             continue
 
         content = bot.download_file(bot.get_file(sticker.file_id).file_path)
@@ -55,7 +55,7 @@ def including_sticker_set(
             parse_mode="Markdown",
         )
 
-    if flag_warm_about_video:
+    if flag_warn_about_video:
         bot.send_message(
             call.message.chat.id,
             "Некоторые стикеры не обработаны, так как это видео или анимация",

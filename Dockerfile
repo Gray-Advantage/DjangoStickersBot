@@ -10,9 +10,3 @@ WORKDIR /django_stickers_bot
 CMD python manage.py migrate \
  && python manage.py init_admins \
  && python manage.py runserver
-# &&
-# && gunicorn datanar.wsgi:application \
-#    --workers $(nproc) \
-#    --bind 0.0.0.0:8000 \
-#    --access-logfile /datanar/logs/gunicorn_access.log \
-#    --error-logfile /datanar/logs/gunicorn_error.log

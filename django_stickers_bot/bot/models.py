@@ -22,7 +22,7 @@ class TelegramUser(models.Model):
     )
 
     context_data = models.CharField(
-        "Контекстная дата, в зависимости от состояния пользователя",
+        "Контекстные данные, в зависимости от состояния пользователя",
         max_length=100,
         default="",
     )
