@@ -4,6 +4,5 @@
 venv/
 cashe/
 for_docker/postgres_data/
-OCR_models/
 
 *.sqlite3
