@@ -1,0 +1,28 @@
+name: "django_stickers_bot"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME}
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    restart: always
+    volumes:
+      - ./for_docker/postgres_data:/var/lib/postgresql/data
+      - ./for_docker/init_scripts:/docker-entrypoint-initdb.d/
+    profiles:
+      - prod
+      - dev
+
+  django_stickers_bot:
+    build: .
+    container_name: django_stickers_bot
+    env_file:
+      - ./.env
+    restart: always
+    depends_on:
+      - postgres
+    profiles:
+      - prod
