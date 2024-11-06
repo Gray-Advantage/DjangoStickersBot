@@ -1,19 +1,25 @@
-from django.contrib.postgres.search import SearchQuery, SearchRank
-from django.db import models
+from django.contrib.postgres.search import (
+    SearchQuery,
+    SearchRank,
+    TrigramSimilarity,
+)
+from django.db.models import F, Manager
 
 
-class StickerManager(models.Manager):
+class StickerManager(Manager):
     def search(self, query):
         return (
             self.get_queryset()
             .annotate(
+                similarity=TrigramSimilarity("text", query),
                 rank=SearchRank(
                     "text_search_vector",
                     SearchQuery(query, config="russian"),
                 ),
+                combined_score=F("similarity") * 0.7 + F("rank") * 0.8,
             )
-            .filter(rank__gte=0.01)
-            .order_by("-rank")[:3]
+            .filter(similarity__gte=0.03)
+            .order_by("-combined_score")[:3]
         )
 
 

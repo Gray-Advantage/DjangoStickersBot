@@ -55,7 +55,7 @@ def router(message: telebot.types.Message):
         return edit_sticker_text(message, user)
 
     if user.is_admin:
-        return process_sticker(message, user)
+        return process_sticker(message)
     return bot.delete_message(message.chat.id, message.message_id)
 
 
@@ -89,7 +89,7 @@ def edit_sticker_text(message: telebot.types.Message, user: TelegramUser):
     user.save()
 
 
-def process_sticker(message: telebot.types.Message, user: TelegramUser):
+def process_sticker(message: telebot.types.Message):
     sticker = message.sticker
     if sticker.set_name is None:
         bot.send_message(

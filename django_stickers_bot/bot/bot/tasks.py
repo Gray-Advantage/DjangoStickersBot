@@ -1,5 +1,8 @@
+from io import BytesIO
+
 from django.conf import settings
 from easyocr import Reader
+from PIL import Image, ImageEnhance, ImageFilter
 from telebot import TeleBot, types
 
 from bot.bot import keyboards
@@ -8,6 +11,19 @@ from bot.models import Sticker, StickerSet
 
 
 reader = Reader(["ru", "en"], model_storage_directory=settings.OCR_MODELS)
+
+
+def upscale_data(content: bytes) -> bytes:
+    with Image.open(BytesIO(content)) as img:
+        img = img.convert("RGB")
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        img = ImageEnhance.Contrast(img).enhance(1.2)
+
+        output = BytesIO()
+        img.save(output, format="PNG")
+        output.seek(0)
+
+        return output.getvalue()
 
 
 def including_sticker_set(
@@ -33,7 +49,10 @@ def including_sticker_set(
             continue
 
         content = bot.download_file(bot.get_file(sticker.file_id).file_path)
-        text_data = preprocess_text(reader.readtext(content))
+        try:
+            text_data = preprocess_text(reader.readtext(upscale_data(content)))
+        except Exception:
+            text_data = "<Пусто>"
 
         Sticker.objects.create(
             file_id=sticker.file_id,

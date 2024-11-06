@@ -11,7 +11,6 @@ services:
     restart: always
     volumes:
       - ./for_docker/postgres_data:/var/lib/postgresql/data
-      - ./for_docker/init_scripts:/docker-entrypoint-initdb.d/
     profiles:
       - prod
       - dev
@@ -22,7 +21,10 @@ services:
     env_file:
       - ./.env
     restart: always
+    volumes:
+      - ./for_docker/fixtures:/django_stickers_bot/fixtures
     depends_on:
       - postgres
     profiles:
       - prod
+      - dev
