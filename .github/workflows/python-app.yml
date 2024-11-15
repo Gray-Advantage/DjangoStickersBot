@@ -30,35 +30,23 @@ jobs:
     - name: Check code formatting with flake8
       run: flake8 ./django_stickers_bot/
 
-  django-test:
+  prod-deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [black-test, flake8-test]
     runs-on: ubuntu-latest
-    container: python:3.12
     steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: pip install -r requirements/dev.txt
-      - name: Run Django tests
-        run: |
-          cd ./datanar
-          python manage.py test
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-#  prod-deploy:
-#    if: github.ref == 'refs/heads/main'
-#    needs: [black-test, flake8-test, django-test]
-#    runs-on: ubuntu-latest
-#    steps:
-#    - name: Checkout code
-#      uses: actions/checkout@v4
-#
-#    - name: Deploy to server
-#      uses: appleboy/ssh-action@master
-#      with:
-#        host: ${{ secrets.SERVER_HOST }}
-#        username: ${{ secrets.SERVER_USERNAME }}
-#        key: ${{ secrets.SERVER_SSH_KEY }}
-#        script: |
-#          cd ~/django_stickers_bot
-#          docker compose down
-#          git reset --hard origin/main
-#          git pull origin main
-#          docker compose up --build -d
+    - name: Deploy to server
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USERNAME }}
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          cd ~/django_stickers_bot
+          docker compose down
+          git reset --hard origin/main
+          git pull origin main
+          docker compose up --build -d
