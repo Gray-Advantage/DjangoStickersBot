@@ -11,15 +11,15 @@ class StickerManager(Manager):
         return (
             self.get_queryset()
             .annotate(
-                similarity=TrigramSimilarity("text", query),
-                rank=SearchRank(
+                quality=SearchRank(
                     "text_search_vector",
                     SearchQuery(query, config="russian"),
                 ),
-                combined_score=F("similarity") * 0.7 + F("rank") * 0.8,
+                similarity=TrigramSimilarity("text", query),
+                rank=F("quality") + F("similarity") * 0.6,
             )
-            .filter(similarity__gte=0.03)
-            .order_by("-combined_score")[:3]
+            .filter(quality__gte=0.01, similarity__gte=0.01)
+            .order_by("-rank")
         )
 
 

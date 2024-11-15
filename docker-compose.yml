@@ -3,7 +3,7 @@ name: "django_stickers_bot"
 services:
   postgres:
     image: postgres:16
-    container_name: postgres
+    container_name: postgres_for_bot
     environment:
       POSTGRES_DB: ${DATABASE_NAME}
       POSTGRES_USER: ${DATABASE_USER}

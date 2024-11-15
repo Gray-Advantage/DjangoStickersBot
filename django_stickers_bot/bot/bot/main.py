@@ -41,6 +41,17 @@ def start(message: telebot.types.Message):
         )
 
 
+@bot.message_handler(commands=["all"])
+def all_sticker_sets(message: telebot.types.Message):
+    sticker_sets = StickerSet.objects.all()
+    for sticker_set in sticker_sets:
+        first_sticker = sticker_set.stickers.first()
+        bot.send_sticker(
+            message.chat.id,
+            first_sticker.file_id,
+        )
+
+
 @bot.message_handler(content_types=utils.ALL_CONTENT_TYPES)
 def router(message: telebot.types.Message):
     if message.content_type not in ["text", "sticker"]:
@@ -60,19 +71,22 @@ def router(message: telebot.types.Message):
 
 
 def search(message: telebot.types.Message):
-    bot.send_message(message.chat.id, "Происходит поиск...")
+    start_search_msg = bot.send_message(message.chat.id, "Происходит поиск...")
 
     result = Sticker.objects.search(message.text)
+    for sticker in result:
+        message = bot.send_sticker(message.chat.id, sticker.file_id)
+        if settings.DEBUG:
+            bot.reply_to(
+                message,
+                f"quality: {sticker.quality}\n"
+                f"similarity: {sticker.similarity}\n"
+                f"rank: {sticker.rank}\n",
+            )
 
     if len(result) == 0:
         bot.send_message(message.chat.id, "К сожалению, ничего не найдено")
-        return
-
-    for sticker in result:
-        bot.send_sticker(
-            message.chat.id,
-            sticker.file_id,
-        )
+    bot.delete_message(message.chat.id, start_search_msg.message_id)
 
 
 def edit_sticker_text(message: telebot.types.Message, user: TelegramUser):
@@ -183,6 +197,25 @@ def callback_inline(call: telebot.types.CallbackQuery):
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
         )
+
+
+@bot.inline_handler(lambda query: True)
+def handle_inline_query(inline_query: telebot.types.InlineQuery):
+    if inline_query.query == "":
+        return
+
+    result = Sticker.objects.search(inline_query.query)
+
+    bot.answer_inline_query(
+        inline_query.id,
+        results=[
+            telebot.types.InlineQueryResultCachedSticker(
+                id=sticker.file_unique_id,
+                sticker_file_id=sticker.file_id,
+            )
+            for sticker in result
+        ],
+    )
 
 
 def start_polling():
