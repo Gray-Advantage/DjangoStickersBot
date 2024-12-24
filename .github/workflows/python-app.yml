@@ -41,6 +41,7 @@ jobs:
     - name: Deploy to server
       uses: appleboy/ssh-action@master
       with:
+        command_timeout: 200m
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USERNAME }}
         key: ${{ secrets.SERVER_SSH_KEY }}
@@ -50,3 +51,4 @@ jobs:
           git reset --hard origin/main
           git pull origin main
           docker compose up --build -d
+          docker system prune -f --volumes
