@@ -1,29 +1,10 @@
-from io import BytesIO
-
+from apscheduler.schedulers.background import BackgroundScheduler
 from django.conf import settings
-from easyocr import Reader
-from PIL import Image, ImageEnhance, ImageFilter
+from django.db.models import Count
 from telebot import TeleBot, types
 
-from bot.bot import keyboards
-from bot.bot.utils import connect_user, preprocess_text
-from bot.models import Sticker, StickerSet
-
-
-reader = Reader(["ru", "en"], model_storage_directory=settings.OCR_MODELS)
-
-
-def upscale_data(content: bytes) -> bytes:
-    with Image.open(BytesIO(content)) as img:
-        img = img.convert("RGB")
-        img = img.filter(ImageFilter.MedianFilter(size=3))
-        img = ImageEnhance.Contrast(img).enhance(1.2)
-
-        output = BytesIO()
-        img.save(output, format="PNG")
-        output.seek(0)
-
-        return output.getvalue()
+from bot.bot.utils import add_sticker, connect_user, show_sticker
+from bot.models import Sticker, StickerSet, TelegramUser
 
 
 def including_sticker_set(
@@ -44,34 +25,18 @@ def including_sticker_set(
             message_id=call.message.id,
         )
 
-        if sticker.is_video or sticker.is_animated:
+        warm, text = add_sticker(sticker, db_sticker_set, bot)
+
+        if warm:
             flag_warn_about_video = True
             continue
 
-        content = bot.download_file(bot.get_file(sticker.file_id).file_path)
-        try:
-            text_data = preprocess_text(reader.readtext(upscale_data(content)))
-        except Exception:
-            text_data = "<Пусто>"
-
-        Sticker.objects.create(
-            file_id=sticker.file_id,
-            file_unique_id=sticker.file_unique_id,
-            text=text_data,
-            sticker_set=db_sticker_set,
-        )
-        sticker_message = bot.send_sticker(
+        show_sticker(
             call.message.chat.id,
-            sticker.file_id,
-        )
-        bot.reply_to(
-            sticker_message,
-            f"Стикер {num}/{len(tg_sticker_set.stickers)}:\n"
-            "```\n"
-            f"{text_data}\n"
-            "```",
-            reply_markup=keyboards.edit_sticker_text(sticker.file_unique_id),
-            parse_mode="Markdown",
+            sticker,
+            bot,
+            text,
+            f"Стикер {num}/{len(tg_sticker_set.stickers)}:",
         )
 
     if flag_warn_about_video:
@@ -83,6 +48,56 @@ def including_sticker_set(
         call.message.chat.id,
         "Стикер пак весь добавлен!",
     )
+
+
+def check_stickers_updates():
+    bot = TeleBot(settings.BOT_TOKEN)
+
+    db_stickers = StickerSet.objects.annotate(size=Count("stickers"))
+    for db_sticker_set in db_stickers:
+        tg_sticker_set = bot.get_sticker_set(db_sticker_set.name)
+        if len(tg_sticker_set.stickers) < db_sticker_set.size:
+            Sticker.objects.filter(sticker_set=db_sticker_set).exclude(
+                file_id__in=[stic.file_id for stic in tg_sticker_set.stickers],
+            ).delete()
+
+            for admin in TelegramUser.objects.filter(is_admin=True):
+                msg = bot.send_sticker(
+                    admin.telegram_id,
+                    tg_sticker_set.stickers[0].file_id,
+                )
+                bot.reply_to(
+                    msg,
+                    "Из этого стикерпака был(и) удален(ы) стикер(ы)",
+                )
+        elif len(tg_sticker_set.stickers) > db_sticker_set.size:
+            db_stickers = Sticker.objects.filter(sticker_set=db_sticker_set)
+            db_stickers = [sticker.file_id for sticker in db_stickers]
+            new_stickers = [
+                stic
+                for stic in tg_sticker_set.stickers
+                if stic.file_id not in db_stickers
+            ]
+
+            admins = TelegramUser.objects.filter(is_admin=True)
+            for sticker in new_stickers:
+                warm, text = add_sticker(sticker, db_sticker_set, bot)
+                if warm:
+                    continue
+                for admin in admins:
+                    show_sticker(
+                        admin.telegram_id,
+                        sticker,
+                        bot,
+                        text,
+                        "В набор был автоматически добавлен новый стикер",
+                    )
+
+
+if settings.RUNNING:
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_stickers_updates, "interval", minutes=5)
+    scheduler.start()
 
 
 __all__ = ["including_sticker_set"]

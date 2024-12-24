@@ -1,10 +1,12 @@
 from pathlib import Path
+import sys
 
 from decouple import config, strtobool
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("DJANGO_SECRET_KEY", default="some-secret-key", cast=str)
+RUNNING = "runserver" in sys.argv
 DEBUG = strtobool(config("DJANGO_DEBUG", "False"))
 
 ALLOWED_HOSTS = config(

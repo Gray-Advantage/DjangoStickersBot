@@ -1,4 +1,3 @@
-from sys import argv
 from threading import Thread
 
 from django.conf import settings
@@ -134,8 +133,9 @@ def process_sticker(message: telebot.types.Message):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call: telebot.types.CallbackQuery):
     bot.answer_callback_query(call.id)
+    data = call.data
 
-    if call.data.startswith("add_sticker_set"):
+    if data.startswith("add_sticker_set"):
         bot.edit_message_reply_markup(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
@@ -143,13 +143,13 @@ def callback_inline(call: telebot.types.CallbackQuery):
         )
         Thread(
             target=tasks.including_sticker_set,
-            args=(bot, call, bot.get_sticker_set(call.data.split(":", 1)[1])),
+            args=(bot, call, bot.get_sticker_set(data.split(":", 1)[1])),
         ).start()
 
-    elif call.data.startswith("edit_sticker_text"):
+    elif data.startswith("edit_sticker_text"):
         user = utils.connect_user(call)
         user.state = user.UserStates.EDIT_STICKER_TEXT
-        user.context_data = call.data.split(":", 1)[1]
+        user.context_data = data.split(":", 1)[1]
         user.save()
 
         bot.reply_to(
@@ -157,41 +157,25 @@ def callback_inline(call: telebot.types.CallbackQuery):
             "Ожидаю новый текст для этого стикера",
         )
 
-    elif call.data.startswith("see_sticker_set"):
+    elif data.startswith("see_sticker_set"):
         stickers = Sticker.objects.filter(
-            sticker_set__name=call.data.split(":", 1)[1],
+            sticker_set__name=data.split(":", 1)[1],
         )
         for num, sticker in enumerate(stickers, 1):
-            sticker_message = bot.send_sticker(
+            utils.show_sticker(
                 call.message.chat.id,
-                sticker.file_id,
-            )
-            bot.reply_to(
-                sticker_message,
-                f"Стикер {num}/{len(stickers)}:\n"
-                "```\n"
-                f"{sticker.text}\n"
-                "```",
-                reply_markup=keyboards.edit_sticker_text(
-                    sticker.file_unique_id,
-                ),
-                parse_mode="Markdown",
+                sticker,
+                bot,
+                sticker.text,
+                f"Стикер {num}/{len(stickers)}:",
             )
 
-    elif call.data.startswith("see_sticker"):
-        sticker = Sticker.objects.get(
-            file_unique_id=call.data.split(":", 1)[1],
-        )
-        bot.send_sticker(call.message.chat.id, sticker.file_id)
-        bot.send_message(
-            call.message.chat.id,
-            f"```\n{sticker.text}\n```",
-            parse_mode="Markdown",
-            reply_markup=keyboards.edit_sticker_text(sticker.file_unique_id),
-        )
+    elif data.startswith("see_sticker"):
+        sticker = Sticker.objects.get(file_unique_id=data.split(":", 1)[1])
+        utils.show_sticker(call.message.chat.id, sticker, bot, sticker.text)
 
-    elif call.data.startswith("delete_sticker_set"):
-        StickerSet.objects.filter(name=call.data.split(":", 1)[1]).delete()
+    elif data.startswith("delete_sticker_set"):
+        StickerSet.objects.filter(name=data.split(":", 1)[1]).delete()
         bot.edit_message_text(
             "Стикер пак удалён",
             chat_id=call.message.chat.id,
@@ -226,7 +210,7 @@ def start_polling():
             continue
 
 
-if "runserver" in argv:
+if settings.RUNNING:
     if not settings.BOT_USE_WEBHOOK:
         bot.remove_webhook()
         thread = Thread(target=start_polling, daemon=True)

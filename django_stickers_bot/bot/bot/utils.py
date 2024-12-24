@@ -1,6 +1,18 @@
+from io import BytesIO
+
+from django.conf import settings
+from PIL import Image, ImageEnhance, ImageFilter
 from telebot import types
 
-from bot.models import TelegramUser
+from bot.bot import keyboards
+from bot.models import Sticker, TelegramUser
+
+
+if settings.RUNNING:
+    from easyocr import Reader
+
+    reader = Reader(["ru", "en"], model_storage_directory=settings.OCR_MODELS)
+
 
 ALL_CONTENT_TYPES = [
     "text",
@@ -25,6 +37,42 @@ ALL_CONTENT_TYPES = [
     "migrate_from_chat_id",
     "pinned_message",
 ]
+
+
+def add_sticker(tg_sticker, db_sticker_set, bot):
+    if tg_sticker.is_video or tg_sticker.is_animated:
+        return True, "<Пусто>"
+
+    content = bot.download_file(bot.get_file(tg_sticker.file_id).file_path)
+    try:
+        text_data = preprocess_text(reader.readtext(upscale_data(content)))
+    except Exception:
+        text_data = "<Пусто>"
+
+    Sticker.objects.create(
+        file_id=tg_sticker.file_id,
+        file_unique_id=tg_sticker.file_unique_id,
+        text=text_data,
+        sticker_set=db_sticker_set,
+    )
+    return False, text_data
+
+
+def show_sticker(chat_id, tg_sticker, bot, text=None, pretext=""):
+    sticker_message = bot.send_sticker(chat_id, tg_sticker.file_id)
+
+    if text is None:
+        try:
+            text = Sticker.objects.get(file_id=tg_sticker.file_id).text
+        except Sticker.DoesNotExist:
+            text = "<Пусто>"
+
+    bot.reply_to(
+        sticker_message,
+        f"{pretext}\n" "```\n" f"{text}\n" "```",
+        reply_markup=keyboards.edit_sticker_text(tg_sticker.file_unique_id),
+        parse_mode="Markdown",
+    )
 
 
 def preprocess_text(results, vertical_shift=15, horizontal_shift=10):
@@ -71,4 +119,22 @@ def connect_user(connect_obj: types.CallbackQuery | types.Message):
     )[0]
 
 
-__all__ = ["ALL_CONTENT_TYPES", "preprocess_text", "connect_user"]
+def upscale_data(content: bytes) -> bytes:
+    with Image.open(BytesIO(content)) as img:
+        img = img.convert("RGB")
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        img = ImageEnhance.Contrast(img).enhance(1.2)
+
+        output = BytesIO()
+        img.save(output, format="PNG")
+        output.seek(0)
+
+        return output.getvalue()
+
+
+__all__ = [
+    "ALL_CONTENT_TYPES",
+    "connect_user",
+    "add_sticker",
+    "show_sticker",
+]
