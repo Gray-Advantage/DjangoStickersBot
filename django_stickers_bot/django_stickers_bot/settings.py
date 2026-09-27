@@ -1,31 +1,21 @@
 from pathlib import Path
-import sys
 
-from decouple import config, strtobool
+from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config("DJANGO_SECRET_KEY", default="some-secret-key", cast=str)
-RUNNING = "runserver" in sys.argv
-DEBUG = strtobool(config("DJANGO_DEBUG", "False"))
-
-ALLOWED_HOSTS = config(
-    "DJANGO_ALLOWED_HOSTS",
-    default="*",
-    cast=lambda line: line.split(","),
-)
+SECRET_KEY = "unused-no-http-endpoints"  # noqa: S105
+DEBUG = False
+ALLOWED_HOSTS: list[str] = []
 
 INSTALLED_APPS = [
     "django.contrib.postgres",
     "bot.apps.BotConfig",
 ]
 
-ROOT_URLCONF = "django_stickers_bot.urls"
-WSGI_APPLICATION = "django_stickers_bot.wsgi.application"
-
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql_psycopg2",
+        "ENGINE": "django.db.backends.postgresql",
         "NAME": config("DATABASE_NAME"),
         "USER": config("DATABASE_USER"),
         "PASSWORD": config("DATABASE_PASSWORD"),
@@ -34,17 +24,12 @@ DATABASES = {
     },
 }
 
-AUTH_USER_MODEL = "users.User"
-
-BOT_USE_WEBHOOK = strtobool(config("BOT_USE_WEBHOOK", "False"))
-BOT_WEBHOOK_URL = config("BOT_WEBHOOK_URL", default="Not set", cast=str)
-BOT_TOKEN = config("BOT_API_TOKEN", default="Not set", cast=str)
-BOT_ADMIN_USER_IDS = config(
+BOT_TOKEN: str = config("BOT_API_TOKEN")
+BOT_ADMIN_USER_IDS: list[int] = config(
     "BOT_ADMIN_USER_IDS",
     default="",
     cast=lambda line: list(map(int, line.split(","))),
 )
 
-OCR_MODELS = BASE_DIR / "OCR_models"
-
+USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

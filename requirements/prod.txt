@@ -1,8 +1,9 @@
-apscheduler==3.11.0
-Django==4.2.16
-easyocr==1.7.2
-gunicorn==20.1.0
-psycopg2-binary==2.9.10
-pillow==11.0.0
+aiogram==3.31.0
+Django==5.2.17
+numpy==2.5.3
+onnxruntime==1.30.0
+opencv-python-headless==4.14.0.94
+pillow==12.3.0
+psycopg[binary]==3.3.6
 python-decouple==3.8
-pyTelegramBotAPI==4.23.0
+rapidocr==3.9.2

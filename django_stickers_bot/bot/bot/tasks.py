@@ -1,103 +1,171 @@
-from apscheduler.schedulers.background import BackgroundScheduler
-from django.conf import settings
-from django.db.models import Count
-from telebot import TeleBot, types
+__all__ = ("check_stickers_updates", "including_sticker_set", "sync_loop")
 
-from bot.bot.utils import add_sticker, connect_user, show_sticker
+import asyncio
+import logging
+
+from aiogram import Bot
+from aiogram.types import Message
+from aiogram.types import Sticker as TgSticker
+
+from bot.bot import keyboards
+from bot.bot.ocr_text import EMPTY_TEXT
+from bot.bot.utils import add_stickers, show_sticker
 from bot.models import Sticker, StickerSet, TelegramUser
 
+logger = logging.getLogger(__name__)
 
-def including_sticker_set(
-    bot: TeleBot,
-    call: types.CallbackQuery,
-    tg_sticker_set: types.StickerSet,
-):
-    db_sticker_set = StickerSet.objects.create(
-        name=tg_sticker_set.name,
-        user=connect_user(call),
+SYNC_INTERVAL = 3600
+NEW_STICKERS_IN_DETAIL = 5
+
+
+async def including_sticker_set(
+    bot: Bot,
+    progress: Message,
+    db_sticker_set: StickerSet,
+    tg_stickers: list[TgSticker],
+) -> None:
+    await progress.edit_text(
+        f"Скачиваю и распознаю набор: стикеров {len(tg_stickers)}",
     )
 
-    flag_warn_about_video = False
-    for num, sticker in enumerate(tg_sticker_set.stickers, 1):
-        bot.edit_message_text(
-            f"Обработка: {num}/{len(tg_sticker_set.stickers)}",
-            chat_id=call.message.chat.id,
-            message_id=call.message.id,
-        )
+    texts, skipped = await add_stickers(bot, tg_stickers, db_sticker_set)
 
-        warm, text = add_sticker(sticker, db_sticker_set, bot)
+    empty = sum(1 for text in texts.values() if text == EMPTY_TEXT)
+    lines = [f"Набор добавлен, стикеров: {len(texts)}"]
+    if empty:
+        lines.append(f"без распознанного текста: {empty}")
 
-        if warm:
-            flag_warn_about_video = True
+    if skipped:
+        lines.append(f"пропущено видео и анимаций: {skipped}")
+
+    await progress.edit_text(
+        "\n".join(lines),
+        reply_markup=keyboards.open_sticker_set(db_sticker_set.pk),
+    )
+
+
+async def check_stickers_updates(bot: Bot) -> None:
+    async for db_sticker_set in StickerSet.objects.all():
+        tg_sticker_set = await bot.get_sticker_set(db_sticker_set.name)
+        tg_stickers = {
+            sticker.file_unique_id: sticker
+            for sticker in tg_sticker_set.stickers
+        }
+        known_ids = {
+            file_unique_id
+            async for file_unique_id in Sticker.objects.filter(
+                sticker_set=db_sticker_set,
+            ).values_list("file_unique_id", flat=True)
+        }
+
+        await _remove_deleted(bot, db_sticker_set, tg_stickers, known_ids)
+        await _refresh_file_ids(db_sticker_set, tg_stickers)
+        await _add_new(bot, db_sticker_set, tg_stickers, known_ids)
+
+
+async def sync_loop(bot: Bot) -> None:
+    failing = False
+    while True:
+        await asyncio.sleep(SYNC_INTERVAL)
+        try:
+            await check_stickers_updates(bot)
+        except Exception as error:
+            logger.exception("Сверка наборов не удалась")
+            if not failing:
+                failing = True
+                await notify_admins(bot, f"Сверка наборов падает: {error}")
+        else:
+            if failing:
+                failing = False
+                await notify_admins(bot, "Сверка наборов снова работает")
+
+
+async def notify_admins(bot: Bot, text: str) -> None:
+    try:
+        async for admin in TelegramUser.objects.filter(is_admin=True):
+            await bot.send_message(admin.telegram_id, text)
+    except Exception:
+        logger.exception("Не удалось предупредить админов")
+
+
+async def _remove_deleted(
+    bot: Bot,
+    db_sticker_set: StickerSet,
+    tg_stickers: dict[str, TgSticker],
+    known_ids: set[str],
+) -> None:
+    deleted_ids = known_ids - set(tg_stickers)
+    if not deleted_ids:
+        return
+
+    await Sticker.objects.filter(
+        sticker_set=db_sticker_set,
+        file_unique_id__in=deleted_ids,
+    ).adelete()
+
+    left_sticker = next(iter(tg_stickers.values()), None)
+    text = f"Из набора {db_sticker_set.name} удалены стикеры"
+    async for admin in TelegramUser.objects.filter(is_admin=True):
+        if left_sticker is None:
+            await bot.send_message(admin.telegram_id, text)
             continue
 
-        show_sticker(
-            call.message.chat.id,
-            sticker,
-            bot,
-            text,
-            f"Стикер {num}/{len(tg_sticker_set.stickers)}:",
+        message = await bot.send_sticker(
+            admin.telegram_id,
+            left_sticker.file_id,
         )
+        await message.reply(text)
 
-    if flag_warn_about_video:
-        bot.send_message(
-            call.message.chat.id,
-            "Некоторые стикеры не обработаны, так как это видео или анимация",
+
+async def _refresh_file_ids(
+    db_sticker_set: StickerSet,
+    tg_stickers: dict[str, TgSticker],
+) -> None:
+    async for sticker in Sticker.objects.filter(sticker_set=db_sticker_set):
+        tg_sticker = tg_stickers.get(sticker.file_unique_id)
+        if tg_sticker is not None and tg_sticker.file_id != sticker.file_id:
+            sticker.file_id = tg_sticker.file_id
+            await sticker.asave(update_fields=["file_id"])
+
+
+async def _add_new(
+    bot: Bot,
+    db_sticker_set: StickerSet,
+    tg_stickers: dict[str, TgSticker],
+    known_ids: set[str],
+) -> None:
+    new_stickers = [
+        tg_stickers[file_unique_id]
+        for file_unique_id in set(tg_stickers) - known_ids
+    ]
+    if not new_stickers:
+        return
+
+    texts, _ = await add_stickers(bot, new_stickers, db_sticker_set)
+
+    if len(texts) > NEW_STICKERS_IN_DETAIL:
+        summary = (
+            f"В набор {db_sticker_set.name} добавились стикеры: {len(texts)}"
         )
-    bot.send_message(
-        call.message.chat.id,
-        "Стикер пак весь добавлен!",
-    )
+        async for admin in TelegramUser.objects.filter(is_admin=True):
+            await bot.send_message(
+                admin.telegram_id,
+                summary,
+                reply_markup=keyboards.open_sticker_set(db_sticker_set.pk),
+            )
 
+        return
 
-def check_stickers_updates():
-    bot = TeleBot(settings.BOT_TOKEN)
+    async for admin in TelegramUser.objects.filter(is_admin=True):
+        for tg_sticker in new_stickers:
+            text = texts.get(tg_sticker.file_unique_id)
+            if text is None:
+                continue
 
-    db_stickers = StickerSet.objects.annotate(size=Count("stickers"))
-    for db_sticker_set in db_stickers:
-        tg_sticker_set = bot.get_sticker_set(db_sticker_set.name)
-        if len(tg_sticker_set.stickers) < db_sticker_set.size:
-            Sticker.objects.filter(sticker_set=db_sticker_set).exclude(
-                file_id__in=[stic.file_id for stic in tg_sticker_set.stickers],
-            ).delete()
-
-            for admin in TelegramUser.objects.filter(is_admin=True):
-                msg = bot.send_sticker(
-                    admin.telegram_id,
-                    tg_sticker_set.stickers[0].file_id,
-                )
-                bot.reply_to(
-                    msg,
-                    "Из этого стикерпака был(и) удален(ы) стикер(ы)",
-                )
-        elif len(tg_sticker_set.stickers) > db_sticker_set.size:
-            db_stickers = Sticker.objects.filter(sticker_set=db_sticker_set)
-            db_stickers = [sticker.file_id for sticker in db_stickers]
-            new_stickers = [
-                stic
-                for stic in tg_sticker_set.stickers
-                if stic.file_id not in db_stickers
-            ]
-
-            admins = TelegramUser.objects.filter(is_admin=True)
-            for sticker in new_stickers:
-                warm, text = add_sticker(sticker, db_sticker_set, bot)
-                if warm:
-                    continue
-                for admin in admins:
-                    show_sticker(
-                        admin.telegram_id,
-                        sticker,
-                        bot,
-                        text,
-                        "В набор был автоматически добавлен новый стикер",
-                    )
-
-
-if settings.RUNNING:
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(check_stickers_updates, "interval", minutes=5)
-    scheduler.start()
-
-
-__all__ = ["including_sticker_set"]
+            await show_sticker(
+                bot,
+                admin.telegram_id,
+                tg_sticker,
+                text,
+                "В набор был автоматически добавлен новый стикер",
+            )

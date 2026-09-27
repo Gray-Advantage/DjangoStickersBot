@@ -1,8 +1,8 @@
+__all__ = ("Sticker", "StickerSet", "TelegramUser")
+
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, SearchVectorField
 from django.db import models
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 from bot.managers import StickerManager
 
@@ -27,20 +27,27 @@ class TelegramUser(models.Model):
         default="",
     )
 
+    def __str__(self) -> str:
+        return str(self.telegram_id)
+
 
 class StickerSet(models.Model):
-    name = models.CharField("Имя стикер пака", max_length=1024)
+    name = models.CharField("Имя стикер пака", max_length=1024, unique=True)
     user = models.ForeignKey(
         TelegramUser,
-        on_delete=models.deletion.CASCADE,
+        on_delete=models.deletion.PROTECT,
         related_name="sticker_sets",
         verbose_name="Пользователь, добавивший этот стикер пак",
     )
 
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self) -> str:
+        return self.name
+
 
 class Sticker(models.Model):
-    objects = StickerManager()
-
     file_id = models.CharField(
         "ИД файла для скачивания",
         max_length=100,
@@ -59,23 +66,31 @@ class Sticker(models.Model):
     )
 
     text = models.TextField("Текстовое содержимое стикера")
-    text_search_vector = SearchVectorField(null=True)
-
-    class Meta:
-        indexes = (GinIndex(fields=["text_search_vector"]),)
-
-    def __str__(self):
-        return self.text
-
-    def __repr__(self):
-        return f"<Sticker {self.text}>"
-
-
-@receiver(post_save, sender=Sticker)
-def update_search_vector(sender, instance, **kwargs):
-    sender.objects.filter(pk=instance.pk).update(
-        text_search_vector=SearchVector("text", config="russian"),
+    text_search_vector = models.GeneratedField(
+        expression=SearchVector("text", config="russian"),
+        output_field=SearchVectorField(),
+        db_persist=True,
+        null=True,
     )
 
+    objects = StickerManager()
 
-__all__ = ["TelegramUser", "Sticker", "StickerSet"]
+    class Meta:
+        ordering = ("id",)
+        indexes = (
+            GinIndex(
+                name="sticker_text_vector_gin",
+                fields=["text_search_vector"],
+            ),
+            GinIndex(
+                name="sticker_text_trigram",
+                fields=["text"],
+                opclasses=["gin_trgm_ops"],
+            ),
+        )
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __repr__(self) -> str:
+        return f"<Sticker {self.text}>"

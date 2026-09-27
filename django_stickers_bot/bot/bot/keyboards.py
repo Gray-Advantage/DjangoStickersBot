@@ -1,55 +1,113 @@
-from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
+__all__ = (
+    "add_sticker_set",
+    "edit_sticker_text",
+    "more_stickers",
+    "open_sticker_set",
+    "see_sticker_set",
+)
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from bot.bot.callbacks import (
+    AddSetCallback,
+    SetAction,
+    SetCallback,
+    StickerAction,
+    StickerCallback,
+)
 
 
-def see_sticker_set(sticker_set_name, sticker_file_unique_id):
+def see_sticker_set(
+    set_id: int,
+    sticker_file_unique_id: str,
+) -> InlineKeyboardMarkup:
+    show_set = SetCallback(action=SetAction.SHOW, set_id=set_id)
+    show_sticker = StickerCallback(
+        action=StickerAction.SHOW,
+        file_unique_id=sticker_file_unique_id,
+    )
+    delete_set = SetCallback(action=SetAction.DELETE, set_id=set_id)
+
     return InlineKeyboardMarkup(
-        [
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    "Просмотреть весь набор",
-                    callback_data=f"see_sticker_set:{sticker_set_name}",
+                    text="Просмотреть весь набор",
+                    callback_data=show_set.pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "Просмотреть этот стикер",
-                    callback_data=f"see_sticker:{sticker_file_unique_id}",
+                    text="Просмотреть этот стикер",
+                    callback_data=show_sticker.pack(),
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    "Удалить набор",
-                    callback_data=f"delete_sticker_set:{sticker_set_name}",
+                    text="Удалить набор",
+                    callback_data=delete_set.pack(),
                 ),
             ],
         ],
     )
 
 
-def add_sticker_set(name):
+def add_sticker_set() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        [
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    "Да",
-                    callback_data=f"add_sticker_set:{name}",
+                    text="Да",
+                    callback_data=AddSetCallback().pack(),
                 ),
             ],
         ],
     )
 
 
-def edit_sticker_text(sticker_id):
+def edit_sticker_text(sticker_file_unique_id: str) -> InlineKeyboardMarkup:
+    edit = StickerCallback(
+        action=StickerAction.EDIT,
+        file_unique_id=sticker_file_unique_id,
+    )
+
     return InlineKeyboardMarkup(
-        [
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    "Изменить",
-                    callback_data=f"edit_sticker_text:{sticker_id}",
+                    text="Изменить",
+                    callback_data=edit.pack(),
                 ),
             ],
         ],
     )
 
 
-__all__ = ["see_sticker_set", "add_sticker_set", "edit_sticker_text"]
+def open_sticker_set(set_id: int) -> InlineKeyboardMarkup:
+    show = SetCallback(action=SetAction.SHOW, set_id=set_id)
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Просмотреть набор",
+                    callback_data=show.pack(),
+                ),
+            ],
+        ],
+    )
+
+
+def more_stickers(set_id: int, offset: int) -> InlineKeyboardMarkup:
+    more = SetCallback(action=SetAction.SHOW, set_id=set_id, offset=offset)
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Показать ещё",
+                    callback_data=more.pack(),
+                ),
+            ],
+        ],
+    )

@@ -7,3 +7,97 @@ application-import-names = ["bot", "django_sticker_bot"]
 
 [tool.black]
 line-length = 79
+extend-exclude = "/(migrations)/"
+
+[tool.ruff]
+line-length = 79
+target-version = "py312"
+extend-exclude = ["migrations", "manage.py"]
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+
+[tool.ruff.lint]
+select = [
+    "A",
+    "ANN",
+    "ASYNC",
+    "B",
+    "BLE",
+    "C",
+    "C4",
+    "COM",
+    "DJ",
+    "DTZ",
+    "E",
+    "EM",
+    "ERA",
+    "F",
+    "FIX",
+    "FLY",
+    "FURB",
+    "G",
+    "I",
+    "ICN",
+    "INP",
+    "ISC",
+    "LOG",
+    "N",
+    "PERF",
+    "PGH",
+    "PIE",
+    "PL",
+    "PTH",
+    "Q",
+    "RET",
+    "RSE",
+    "RUF",
+    "S",
+    "SIM",
+    "SLF",
+    "T20",
+    "TC",
+    "TID",
+    "TRY",
+    "UP",
+    "W",
+]
+ignore = [
+    "ANN401",
+    "RUF001",
+    "RUF003",
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["DTZ", "S", "TC"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+order-by-type = false
+known-first-party = ["bot", "django_stickers_bot"]
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+mypy_path = "django_stickers_bot"
+exclude = "migrations"
+
+[[tool.mypy.overrides]]
+module = [
+    "decouple",
+]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "django_stickers_bot.settings"
